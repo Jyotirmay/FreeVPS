@@ -6,7 +6,7 @@ on:
 jobs:
   ubuntu-vps:
     runs-on: ubuntu-latest
-    timeout-minutes: 350 # Just under 6 hours
+    timeout-minutes: 4300
 
     steps:
       - name: Setup SSH User
