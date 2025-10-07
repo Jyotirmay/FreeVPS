@@ -2,11 +2,13 @@ name: Linux VPS
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */4 * * *"  # Runs every 4 hours
 
 jobs:
   ubuntu-vps:
     runs-on: ubuntu-latest
-    timeout-minutes: 4315 # Just under 72 hours
+    timeout-minutes: 350 # Just under 72 hours
 
     steps:
       - name: Setup SSH User
