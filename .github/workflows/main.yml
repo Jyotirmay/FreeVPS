@@ -6,41 +6,105 @@ on:
 jobs:
   ubuntu-vps:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Max job runtime = 30 minutes
+    timeout-minutes: 30
 
     steps:
+      # -------------------------------------------------
+      # 1. Create SSH User for VPS access
+      # -------------------------------------------------
       - name: Setup SSH User
         run: |
-          # Generate a random password
           PASSWORD=$(openssl rand -base64 16)
           echo "PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
-          # Create a new user and set its password
           sudo useradd -m -s /bin/bash vps
           echo "vps:$PASSWORD" | sudo chpasswd
-
-          # Add user to the sudo group for admin privileges
           sudo usermod -aG sudo vps
-          
+
           echo "✅ User 'vps' created with a random password."
 
+      # -------------------------------------------------
+      # 2. Install & connect Tailscale for remote SSH
+      # -------------------------------------------------
       - name: Install and Run Tailscale
         run: |
-          # Install Tailscale
           curl -fsSL https://tailscale.com/install.sh | sh
-          
-          # Start Tailscale and connect using your auth key
           sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-ubuntu-runner
-          
           echo "✅ Tailscale connected."
 
+      # -------------------------------------------------
+      # 3. Install Python + PyDrive2
+      # -------------------------------------------------
+      - name: Install Python & PyDrive2
+        run: |
+          sudo apt update -y
+          sudo apt install -y python3 python3-pip unzip
+          pip install pydrive2 google-auth google-auth-oauthlib
+          echo "✅ Python & dependencies installed."
+
+      # -------------------------------------------------
+      # 4. Write credentials.json from GitHub Secret
+      # -------------------------------------------------
+      - name: Write Google Credentials
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS_JSON }}
+        run: |
+          mkdir -p ~/.gdrive
+          echo "$GDRIVE_CREDENTIALS" > ~/.gdrive/credentials.json
+          echo "✅ credentials.json written."
+
+      # -------------------------------------------------
+      # 5. Download File from Google Drive
+      # -------------------------------------------------
+      - name: Download File from Google Drive
+        env:
+          GDRIVE_FILE_ID: ${{ secrets.GDRIVE_FILE_ID }}
+        run: |
+          python3 - <<'PYCODE'
+          from pydrive2.auth import GoogleAuth
+          from pydrive2.drive import GoogleDrive
+
+          gauth = GoogleAuth()
+          gauth.LoadCredentialsFile("/home/runner/.gdrive/credentials.json")
+          if gauth.credentials is None:
+              gauth.CommandLineAuth()
+          elif gauth.access_token_expired:
+              gauth.Refresh()
+          else:
+              gauth.Authorize()
+
+          drive = GoogleDrive(gauth)
+          file_id = "${{ env.GDRIVE_FILE_ID }}"
+          file = drive.CreateFile({'id': file_id})
+          print(f"⬇️ Downloading {file['title']} ...")
+          file.GetContentFile(file['title'])
+          print("✅ Download complete.")
+          PYCODE
+
+      # -------------------------------------------------
+      # 6. Extract ZIP (if applicable)
+      # -------------------------------------------------
+      - name: Extract Archive (optional)
+        run: |
+          unzip -o *.zip || echo "Not a ZIP file, skipping extraction."
+          echo "✅ Extraction complete."
+
+      # -------------------------------------------------
+      # 7. Run the Script
+      # -------------------------------------------------
+      - name: Run the Script
+        run: |
+          echo "🚀 Running script..."
+          python3 your_script.py  # Change to your filename
+          echo "✅ Script finished."
+
+      # -------------------------------------------------
+      # 8. Show SSH connection info
+      # -------------------------------------------------
       - name: Display Connection Details & Keep Alive
         run: |
-          # Get the Tailscale IP address
           TS_IP=$(tailscale ip -4)
           echo "TAILSCALE_IP=$TS_IP" >> $GITHUB_ENV
-          
-          # Display the connection info in the workflow log
           echo "================================================="
           echo "    SSH Connection Details"
           echo "================================================="
@@ -48,12 +112,9 @@ jobs:
           echo "Username:   vps"
           echo "Password:   ${{ env.PASSWORD }}"
           echo ""
-          echo "To connect, run:"
-          echo "ssh vps@$TS_IP"
+          echo "To connect: ssh vps@$TS_IP"
           echo "================================================="
-          
-          # Keep alive (limited to 30 minutes by timeout)
           for i in {1..6}; do
-            echo "[$(date)] Session active. Workflow auto-ends in 30 minutes max."
-            sleep 300  # 5 minutes per loop, total ~30 minutes
+            echo "[$(date)] Session active..."
+            sleep 300
           done
