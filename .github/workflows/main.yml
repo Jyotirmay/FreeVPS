@@ -95,7 +95,7 @@ jobs:
       - name: Run the Script
         run: |
           echo "🚀 Running script..."
-          python3 your_script.py  # Change to your filename
+          python3 test.py  # Change to your filename
           echo "✅ Script finished."
 
       # -------------------------------------------------
