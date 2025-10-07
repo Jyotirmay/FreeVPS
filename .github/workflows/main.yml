@@ -3,12 +3,12 @@ name: Linux VPS
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */4 * * *"  # Runs every 4 hours
+    - cron: "*/15 * * * *"  # Runs every 15 minutes
 
 jobs:
   ubuntu-vps:
     runs-on: ubuntu-latest
-    timeout-minutes: 350 # Just under 72 hours
+    timeout-minutes: 30  # Max job runtime = 30 minutes
 
     steps:
       - name: Setup SSH User
@@ -54,8 +54,8 @@ jobs:
           echo "ssh vps@$TS_IP"
           echo "================================================="
           
-          # Infinite loop to keep the runner alive
-          while true; do
-            echo "[$(date)] Session active. Cancel the workflow to terminate."
-            sleep 300
+          # Keep alive (limited to 30 minutes by timeout)
+          for i in {1..6}; do
+            echo "[$(date)] Session active. Workflow auto-ends in 30 minutes max."
+            sleep 300  # 5 minutes per loop, total ~30 minutes
           done
